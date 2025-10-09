@@ -1,0 +1,59 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isAdmin() {
+      return getUserData().role == 'admin';
+    }
+    
+    function isTeamLead() {
+      return getUserData().role == 'team-lead';
+    }
+    
+    function isOwnerOrAdmin(userId) {
+      return request.auth.uid == userId || isAdmin() || isTeamLead();
+    }
+
+    // Attendance photos
+    match /attendance/{employeeId}/{filename} {
+      allow read: if isAuthenticated() && isOwnerOrAdmin(employeeId);
+      allow write: if isAuthenticated() && isOwnerOrAdmin(employeeId);
+      allow delete: if isAuthenticated() && (isAdmin() || isTeamLead());
+    }
+
+    // Profile pictures
+    match /profiles/{userId}/{filename} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwnerOrAdmin(userId);
+      allow delete: if isAuthenticated() && isOwnerOrAdmin(userId);
+    }
+
+    // Project documents
+    match /projects/{projectId}/{filename} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeamLead());
+      allow delete: if isAuthenticated() && (isAdmin() || isTeamLead());
+    }
+
+    // General uploads (for admins)
+    match /uploads/{filename} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isAdmin() || isTeamLead());
+      allow delete: if isAuthenticated() && (isAdmin() || isTeamLead());
+    }
+
+    // Fallback rule for development
+    match /{allPaths=**} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+  }
+}

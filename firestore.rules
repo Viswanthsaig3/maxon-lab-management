@@ -1,0 +1,188 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // An admin is any authenticated user whose corresponding users doc has role == 'admin'
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // ADMIN GETS ABSOLUTE FULL ACCESS TO EVERYTHING - FIRST PRIORITY
+    match /{document=**} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Admins can do anything on users
+      allow read, write: if isAuthenticated() && isAdmin();
+
+      // Users can read their own profile
+      allow read: if isAuthenticated() && isOwner(userId);
+
+      // Allow creation during signup or by authenticated users (e.g. admin tools)
+      allow create: if isAuthenticated() || request.auth.uid == userId;
+
+      // Users can update their own document; admins already covered above
+      allow update: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Tasks collection
+    match /tasks/{taskId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+    }
+
+    // Projects collection
+    match /projects/{projectId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allow authenticated users to create projects
+    }
+
+    // Inventory collection
+    match /inventory/{itemId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read, create, update: if isAuthenticated();
+      allow delete: if isAuthenticated(); // Allow users to delete inventory items
+    }
+
+    // CRM collections
+    match /clients/{clientId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated();
+    }
+    
+    match /quotations/{quotationId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated();
+    }
+
+    match /invoices/{invoiceId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated();
+    }
+
+    // Payroll collection
+    match /payroll_records/{recordId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated() && isOwner(resource.data.employeeId);
+    }
+
+    // Attendance collection
+    match /attendance/{attendanceId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated() && isOwner(resource.data.employeeId);
+      allow create: if isAuthenticated() && isOwner(request.resource.data.employeeId);
+      allow update: if isAuthenticated() && isOwner(resource.data.employeeId);
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read, update: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated();
+    }
+
+    // RBAC Collections
+    match /roles/{roleId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated();
+    }
+
+    match /userRoles/{userRoleId} {
+      // Admin override
+      allow read, write, delete, update, create: if isAuthenticated() && isAdmin();
+
+      // Non-admins can only read
+      allow read: if isAuthenticated();
+
+      // Allow creation during initial setup for authenticated users when doc does not yet exist
+      allow create: if isAuthenticated();
+    }
+
+    match /accessRules/{ruleId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+
+    match /accessAuditLogs/{logId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow create: if isAuthenticated();
+    }
+
+    match /dataAccessPolicies/{policyId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+
+    match /userSessions/{sessionId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read, write: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    match /securitySettings/{settingId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+
+    // Resource Calculations
+    match /resourceCalculations/{calculationId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated();
+    }
+
+    // Leave Requests
+    match /leave_requests/{requestId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated() && isOwner(resource.data.employeeId);
+      allow create: if isAuthenticated() && isOwner(request.resource.data.employeeId);
+    }
+
+    // Stock movements collection
+    match /stockMovements/{movementId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read, create: if isAuthenticated();
+    }
+
+    // Stock alerts collection  
+    match /stockAlerts/{alertId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read, create, update: if isAuthenticated();
+    }
+
+    // Locations collection
+    match /locations/{locationId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read, create, update: if isAuthenticated();
+    }
+
+    // Inventory audit trail collection
+    match /inventoryAuditTrail/{auditId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read, create: if isAuthenticated();
+    }
+
+    // Inventory reports collection
+    match /inventoryReports/{reportId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read, create: if isAuthenticated();
+    }
+
+    // Default fallback - authenticated users can read, admin can do everything
+    match /{collection}/{document} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated();
+    }
+  }
+}
